@@ -2,6 +2,7 @@ package chain
 
 import (
 	"fmt"
+	"reflect"
 	"strconv"
 )
 
@@ -84,21 +85,29 @@ func (c *Chain) SetData(data interface{}) *Chain {
 	return c
 }
 
-func (c *Chain) Map(f func(interface{}) interface{}) *Chain {
-	switch v := c.data.(type) {
-	case []interface{}:
-		for i, item := range v {
-			v[i] = f(item)
+func (c *Chain) Map(f interface{}) *Chain {
+	dataType := reflect.TypeOf(c.data)
+
+	if dataType.Kind() == reflect.Slice {
+		slice := reflect.ValueOf(c.data)
+		for i := 0; i < slice.Len(); i++ {
+			element := slice.Index(i)
+			result := reflect.ValueOf(f).Call([]reflect.Value{element})
+			slice.Index(i).Set(result[0])
 		}
-	case map[interface{}]interface{}:
-		newMap := make(map[interface{}]interface{})
-		for k, v := range v {
-			newMap[k] = f(v)
+	} else if dataType.Kind() == reflect.Map {
+		m := reflect.ValueOf(c.data)
+		newMap := reflect.MakeMap(reflect.TypeOf(map[interface{}]interface{}{}))
+		for _, key := range m.MapKeys() {
+			value := m.MapIndex(key)
+			result := reflect.ValueOf(f).Call([]reflect.Value{value})
+			newMap.SetMapIndex(key, result[0])
 		}
-		c.data = newMap
-	default:
-		fmt.Println("Tipo de datos no compatible para mapear:", v)
+		c.data = newMap.Interface()
+	} else {
+		fmt.Println("Unsupported data type for mapping:", dataType)
 	}
+
 	return c
 }
 
